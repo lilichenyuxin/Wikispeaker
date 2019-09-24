@@ -56,44 +56,15 @@ public class Main extends Application {
 
         creationSearchBar = new TextField();
         creationSearchBar.setPromptText("Search..");
-        creationSearchBar.textProperty().addListener((observable, oldText, newText) -> {
-            loadCreations();
-        });
+
         HBox.setHgrow(creationSearchBar, Priority.ALWAYS);
 
-
-        addCreationButton = new Button();
-        addCreationButton.setGraphic(new ImageView(imageManager.getImage("add")));
-        addCreationButton.setOnAction(e -> {
-            List<String> sentences = CreationSearchGUI.createSearchWindow(window).showAndReturn();
-            if (sentences == null) {
-                return;
-            }
-            String wikiName = sentences.get(sentences.size()-1);
-            sentences.remove(sentences.size()-1);
-            String text = SentenceSelectionGUI.createSentenceSelectionWindow(window, sentences).showAndReturn();
-            if (text == null) {
-                return;
-            }
-            String creationName = CreationNamingGUI.createCreationNamingWindow(window).showAndReturn();
-            if (creationName == null) {
-                return;
-            }
-
-            Service<Void> createCreationService = new CreationCreatorService(text, creationName, wikiName);
-            createCreationService.setOnSucceeded(event -> {
-                loadCreations();
-            });
-            createCreationService.start();
-        });
+        addCreationButton = new Button("add");
         Tooltip addTooltip = new Tooltip("Create new creation");
         addCreationButton.setTooltip(addTooltip);
 
-        refreshCreationsButton = new Button();
-        refreshCreationsButton.setGraphic(new ImageView(imageManager.getImage("refresh")));
-        refreshCreationsButton.setOnAction(e -> {
-            loadCreations();
-        });
+        refreshCreationsButton = new Button("refresh");
+        
         Tooltip refreshTooltip = new Tooltip("Refresh creations list");
         refreshCreationsButton.setTooltip(refreshTooltip);
 
@@ -126,76 +97,6 @@ public class Main extends Application {
         Scene mainScene = new Scene(root, 400, 400);
         window.setScene(mainScene);
         window.show();
-
-    }
-
-    private void loadCreations() {
-
-        List<Node> creationPanes = new ArrayList<Node>();
-
-        // get creations
-        List<Creation> creations = CreationUtils.queryCreations(creationSearchBar.getText(),
-                new Creation.AlphabeticalComparator(false));
-        for (Creation c : creations) {
-
-            HBox creationPane = new HBox();
-            creationPane.setPadding(new Insets(7, 12, 7, 12));
-            creationPane.setSpacing(8);
-            creationPane.setAlignment(Pos.CENTER);
-            creationPane.setStyle("-fx-background-color: rgb(225, 225, 225);" +
-                    "-fx-background-radius: 4");
-
-            VBox labelPane = new VBox();
-            labelPane.setAlignment(Pos.CENTER_LEFT);
-
-            Label nameLabel = new Label(c.getName());
-            Label dateLabel = new Label(c.getFormattedDate());
-
-            labelPane.getChildren().addAll(nameLabel, dateLabel);
-
-            Button playButton = new Button();
-            playButton.setGraphic(new ImageView(imageManager.getImage("play")));
-            playButton.setOnAction(e -> {
-                CreationUtils.playCreation(nameLabel.getText());
-            });
-            Tooltip playTooltip = new Tooltip("Play creation");
-            playButton.setTooltip(playTooltip);
-
-
-            Button deleteButton = new Button();
-            deleteButton.setGraphic(new ImageView(imageManager.getImage("delete")));
-            deleteButton.setOnAction(e -> {
-
-                String msg = "Are you sure you want to delete \"" + nameLabel.getText() + "\"?";
-                boolean confirmation = GUITools.createConfirmationDialog("Delete \"" + nameLabel.getText() + "\"", msg);
-                if (confirmation) {
-                    CreationUtils.deleteCreation(nameLabel.getText());
-                    loadCreations();
-                }
-
-            });
-            Tooltip deleteTooltip = new Tooltip("Delete creation");
-            deleteButton.setTooltip(deleteTooltip);
-
-            Pane spacer = new Pane();
-            HBox.setHgrow(spacer, Priority.ALWAYS);
-
-            creationPane.getChildren().addAll(labelPane, spacer, playButton, deleteButton);
-            creationPanes.add(creationPane);
-
-        }
-
-        creationsPane.getChildren().setAll(creationPanes);
-
-    }
-
-    private void loadImages() {
-
-        imageManager = new ImageManager();
-        imageManager.loadImage("refresh", "resources/refresh.png", 15, 15);
-        imageManager.loadImage("delete", "resources/delete.png", 15, 15);
-        imageManager.loadImage("add", "resources/add.png", 15, 15);
-        imageManager.loadImage("play", "resources/play.png", 15, 15);
 
     }
 
