@@ -121,7 +121,7 @@ public class WikiCreationMenu {
 				previewButton.setDisable(false);
 			});
 			
-			Service service = new Service<String>() {
+			Service<String> service = new Service<String>() {
 				
 				@Override
 				protected Task<String> createTask() {
@@ -193,6 +193,25 @@ public class WikiCreationMenu {
 		window.show();
 		window.setMinWidth(window.getWidth());
 		window.setMinHeight(window.getHeight());
+		
+	}
+	
+	private static void saveAudioFile(String text, String name) {
+		
+		Task<String> audioTask = new CreateAudioFileTask(text, name);
+		audioTask.setOnSucceeded((e) -> {
+			// will refresh audio file list when that functionality has been implemented
+		});
+		
+		Service<String> service = new Service<String>() {
+			
+			@Override
+			protected Task<String> createTask() {
+				return audioTask;
+			}
+			
+		};
+		service.start();
 		
 	}
 	
