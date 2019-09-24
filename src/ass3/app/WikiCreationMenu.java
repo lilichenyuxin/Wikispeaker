@@ -1,8 +1,12 @@
 package ass3.app;
 
+import java.io.File;
+
+import ass3.app.tasks.CreateAudioFileTask;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-
+import javafx.concurrent.Service;
+import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 
@@ -23,10 +27,14 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.scene.media.Media;
+import javafx.scene.media.MediaPlayer;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 public class WikiCreationMenu {
+	
+	private static MediaPlayer currentAudioPreview = null;
 	
 	public static void createWindow(Stage parentStage) {
 				
@@ -84,6 +92,49 @@ public class WikiCreationMenu {
 		wikiTextArea.setMinHeight(400);
 		VBox.setVgrow(wikiTextArea, Priority.ALWAYS);
 		
+		previewButton.setOnAction( (e) -> {
+			
+			if (currentAudioPreview != null) {
+				// prevent overlapping audio
+				currentAudioPreview.stop();
+			}
+			
+			previewButton.setDisable(true);
+			
+			String text = wikiTextArea.getSelectedText();
+			Task<String> createAudioTask = new CreateAudioFileTask(text, null);
+			
+			createAudioTask.setOnSucceeded((e_) -> {
+				
+				previewButton.setDisable(false);
+				
+				// preview the audio with embedded player
+				
+				String filePath = (String) createAudioTask.getValue();
+				Media audio = new Media(new File(filePath).toURI().toString());
+				currentAudioPreview = new MediaPlayer(audio);
+				currentAudioPreview.play();
+				
+			});
+			
+			createAudioTask.setOnFailed((e_) -> {
+				previewButton.setDisable(false);
+			});
+			
+			Service service = new Service<String>() {
+				
+				@Override
+				protected Task<String> createTask() {
+					
+					return createAudioTask;
+					
+				}
+				
+			};
+			service.start();
+			
+		});
+		
 		editorLayout.getChildren().setAll(utilityBar, wikiTextArea);
 		
 		// END EDITOR LAYOUT //
@@ -95,9 +146,10 @@ public class WikiCreationMenu {
 		
 		VBox creationLayout = new VBox(10);
 		
-		creationLayout.setMinWidth(300);
-		creationLayout.setPrefWidth(300);
-		creationLayout.setMaxWidth(300);
+		creationLayout.setMinWidth(350);
+		creationLayout.setPrefWidth(350);
+		creationLayout.setMaxWidth(350);
+		VBox.setVgrow(creationLayout, Priority.ALWAYS);
 		
 		ScrollPane audioScrollPane = new ScrollPane();
 		VBox.setVgrow(audioScrollPane, Priority.ALWAYS);
@@ -106,8 +158,8 @@ public class WikiCreationMenu {
 		scrollContentPane.setPadding(new Insets(10));
 		
 		audioScrollPane.setContent(scrollContentPane);
-		audioScrollPane.setMaxHeight(400);
 		audioScrollPane.setHbarPolicy(ScrollBarPolicy.NEVER);
+		VBox.setVgrow(audioScrollPane, Priority.ALWAYS);
 		
 		TextField creationNameField = new TextField();
 		creationNameField.setPromptText("Creation name..");
@@ -120,11 +172,11 @@ public class WikiCreationMenu {
 		
 		creationLayout.getChildren().setAll(audioScrollPane, saveLayout);
 		
-		String date = "24/09/2019 12:25PM";
-		String name = "This is audio file #";
-		for (int i = 0; i < 20; i++) {
-			scrollContentPane.getChildren().add(createAudioMenuItem(date, name + i));
-		}
+//		String date = "24/09/2019 12:25PM";
+//		String name = "This is audio file #";
+//		for (int i = 0; i < 20; i++) {
+//			scrollContentPane.getChildren().add(createAudioMenuItem(date, name + i));
+//		}
 				
 		// END CREATION MENU LAYOUT //
 		

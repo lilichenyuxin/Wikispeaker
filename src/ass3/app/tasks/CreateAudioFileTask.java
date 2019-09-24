@@ -40,13 +40,14 @@ public class CreateAudioFileTask extends Task<String> {
 
 			// create empty dir with appropriate name
 			ProcessBuilder builder = new ProcessBuilder("bash", "-c", "rm -r " + dir + "; mkdir " + dir);
-			builder.start();
-
+			builder.start().waitFor();
+			
 			// create tts audio
 
 			String command = "echo \"" + _text + "\" | text2wave -o \"" + filePath + "\"";
 			builder.command("bash", "-c", command);
-			builder.start();
+			builder.start().waitFor();
+			
 
 		} catch (IOException e) {
 			e.printStackTrace();
