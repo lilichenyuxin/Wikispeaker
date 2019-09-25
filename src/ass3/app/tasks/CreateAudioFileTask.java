@@ -24,6 +24,7 @@ public class CreateAudioFileTask extends Task<String> {
 	}
 
 	// returns the path to the created audio file
+	// removes file with same name if one exists, so a check for such a file should be done elsewhere
 	@Override
 	protected String call() throws Exception {
 		
@@ -44,7 +45,7 @@ public class CreateAudioFileTask extends Task<String> {
 			
 			// create tts audio
 
-			String command = "echo \"" + _text + "\" | text2wave -o \"" + filePath + "\"";
+			String command = "rm " + filePath + "; echo \"" + _text + "\" | text2wave -o \"" + filePath + "\"";
 			builder.command("bash", "-c", command);
 			builder.start().waitFor();
 			

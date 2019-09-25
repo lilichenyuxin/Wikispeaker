@@ -1,6 +1,10 @@
 package ass3.app;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 
 import ass3.app.tasks.CreateAudioFileTask;
 import javafx.collections.FXCollections;
@@ -11,8 +15,10 @@ import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 
 import javafx.scene.Scene;
-
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Control;
 import javafx.scene.control.Label;
@@ -36,6 +42,8 @@ public class WikiCreationMenu {
 	
 	private static MediaPlayer currentAudioPreview = null;
 	
+	private static VBox scrollContentPane;
+	
 	public static void createWindow(Stage parentStage) {
 				
 		VBox rootLayout = new VBox(10);
@@ -49,9 +57,7 @@ public class WikiCreationMenu {
 		VBox editorLayout = new VBox(10);
 		HBox.setHgrow(editorLayout, Priority.ALWAYS);
 		
-		BorderPane utilityBar = new BorderPane();
-		HBox dropdownLayout = new HBox(10);
-		HBox buttonLayout = new HBox(10);
+		HBox utilityBar = new HBox(10);
 		
 		ObservableList<String> synthesiserOptions = FXCollections.observableArrayList(
 			"Festival",
@@ -73,24 +79,58 @@ public class WikiCreationMenu {
 		voiceDropdown.getSelectionModel().selectFirst();
 		voiceDropdown.setMinWidth(Control.USE_PREF_SIZE);
 		
-		dropdownLayout.getChildren().setAll(synthesiserDropdown, voiceDropdown);
-		
 		Button previewButton = new Button("Preview selection");
 		previewButton.setMinWidth(Control.USE_PREF_SIZE);
+		previewButton.setDisable(true);
 		
-		Button saveButton = new Button("Save selection as..");
+		TextField audioNameField = new TextField();
+		audioNameField.setPromptText("Audio file name..");
+		
+		Button saveButton = new Button("Create audio file");
 		saveButton.setMinWidth(Control.USE_PREF_SIZE);
+		saveButton.setDisable(true);
 		
-		buttonLayout.getChildren().setAll(previewButton, saveButton);
+		saveButton.disableProperty().addListener((observableValue, oldValue, newValue) -> {
+			
+			if (newValue == false && audioNameField.getText().length() == 0) {
+				// can only change to true if audio name field is nonempty
+				saveButton.setDisable(true);
+			}
+			
+		});
 		
-		utilityBar.setLeft(dropdownLayout);
-		utilityBar.setRight(buttonLayout);
+		
+				
+		Pane spacer = new Pane();
+		HBox.setHgrow(spacer, Priority.ALWAYS);
+		
+		utilityBar.getChildren().setAll(synthesiserDropdown, voiceDropdown, spacer, previewButton, audioNameField, saveButton);
 		
 		TextArea wikiTextArea = new TextArea();
 		wikiTextArea.setText(dummyText);
 		wikiTextArea.setWrapText(true);
 		wikiTextArea.setMinHeight(400);
 		VBox.setVgrow(wikiTextArea, Priority.ALWAYS);
+		
+		wikiTextArea.selectedTextProperty().addListener((textProperty, oldValue, newValue) -> {
+			if (newValue.length() == 0) {
+				saveButton.setDisable(true);
+				previewButton.setDisable(true);
+			} else {
+				saveButton.setDisable(false);
+				previewButton.setDisable(false);
+			}
+		});
+		
+		audioNameField.textProperty().addListener((observable, oldValue, newValue) -> {
+			
+			if (newValue.length() == 0) {
+				saveButton.setDisable(true);
+			} else if (wikiTextArea.getSelectedText().length() != 0) {
+				saveButton.setDisable(false);
+			}
+			
+		});
 		
 		previewButton.setOnAction( (e) -> {
 			
@@ -135,6 +175,33 @@ public class WikiCreationMenu {
 			
 		});
 		
+		saveButton.setOnAction((e) -> {
+			
+			// check if file with specified name exists
+			try {
+				
+				ProcessBuilder builder = new ProcessBuilder("test", "-e", "audio/" + audioNameField.getText());
+				int fileExists = builder.start().waitFor();
+				
+				if (fileExists == 0) {
+					Alert alert = new Alert(AlertType.CONFIRMATION, "Would you like to overwrite it?", 
+																	ButtonType.YES, ButtonType.NO);
+					alert.setHeaderText("File with that name already exists");
+					alert.showAndWait();
+					if (alert.getResult() == ButtonType.YES) {
+						
+						saveAudioFile(wikiTextArea.getSelectedText(), audioNameField.getText());
+						
+					}
+				}
+				
+			} catch (InterruptedException | IOException ex) {
+				ex.printStackTrace();
+			}
+		
+			
+		});
+		
 		editorLayout.getChildren().setAll(utilityBar, wikiTextArea);
 		
 		// END EDITOR LAYOUT //
@@ -154,7 +221,7 @@ public class WikiCreationMenu {
 		ScrollPane audioScrollPane = new ScrollPane();
 		VBox.setVgrow(audioScrollPane, Priority.ALWAYS);
 		
-		VBox scrollContentPane = new VBox(10);
+		scrollContentPane = new VBox(10);
 		scrollContentPane.setPadding(new Insets(10));
 		
 		audioScrollPane.setContent(scrollContentPane);
@@ -171,12 +238,6 @@ public class WikiCreationMenu {
 		saveLayout.getChildren().setAll(creationNameField, saveCreationButton);
 		
 		creationLayout.getChildren().setAll(audioScrollPane, saveLayout);
-		
-//		String date = "24/09/2019 12:25PM";
-//		String name = "This is audio file #";
-//		for (int i = 0; i < 20; i++) {
-//			scrollContentPane.getChildren().add(createAudioMenuItem(date, name + i));
-//		}
 				
 		// END CREATION MENU LAYOUT //
 		
@@ -200,7 +261,9 @@ public class WikiCreationMenu {
 		
 		Task<String> audioTask = new CreateAudioFileTask(text, name);
 		audioTask.setOnSucceeded((e) -> {
-			// will refresh audio file list when that functionality has been implemented
+
+			updateAudioFileList("");
+
 		});
 		
 		Service<String> service = new Service<String>() {
@@ -212,6 +275,31 @@ public class WikiCreationMenu {
 			
 		};
 		service.start();
+		
+	}
+	
+	private static void updateAudioFileList(String searchTerm) {
+		
+		String cmd = "ls audio/ | grep \"" + searchTerm + "\"";
+		try {
+			
+			ProcessBuilder builder = new ProcessBuilder("bash", "-c", cmd);
+			Process process = builder.start();
+			
+			InputStream stdout = process.getInputStream();
+			BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(stdout));
+			
+			String fileName;
+			while ((fileName = bufferedReader.readLine()) != null) {
+				
+				fileName = fileName.split(".")[0];  // remove extension
+				System.out.println(fileName);
+				
+			}
+			
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		
 	}
 	
