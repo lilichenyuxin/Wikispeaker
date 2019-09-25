@@ -5,6 +5,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
 
 import ass3.app.tasks.CreateAudioFileTask;
 import javafx.collections.FXCollections;
@@ -13,7 +15,7 @@ import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
-
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
@@ -22,6 +24,7 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Control;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.ScrollPane.ScrollBarPolicy;
 import javafx.scene.control.Separator;
@@ -40,9 +43,9 @@ import javafx.stage.Stage;
 
 public class WikiCreationMenu {
 	
+	private static final ListView<AudioFileHBoxCell> audioListView = new ListView<AudioFileHBoxCell>();
 	private static MediaPlayer currentAudioPreview = null;
 	
-	private static VBox scrollContentPane;
 	
 	public static void createWindow(Stage parentStage, String wikiText) {
 				
@@ -188,16 +191,16 @@ public class WikiCreationMenu {
 																	ButtonType.YES, ButtonType.NO);
 					alert.setHeaderText("File with that name already exists");
 					alert.showAndWait();
-					if (alert.getResult() == ButtonType.YES) {
-						
-						saveAudioFile(wikiTextArea.getSelectedText(), audioNameField.getText());
-						
+					if (alert.getResult() != ButtonType.YES) {
+						return;
 					}
 				}
 				
 			} catch (InterruptedException | IOException ex) {
 				ex.printStackTrace();
 			}
+			
+			saveAudioFile(wikiTextArea.getSelectedText(), audioNameField.getText());
 		
 			
 		});
@@ -218,15 +221,7 @@ public class WikiCreationMenu {
 		creationLayout.setMaxWidth(350);
 		VBox.setVgrow(creationLayout, Priority.ALWAYS);
 		
-		ScrollPane audioScrollPane = new ScrollPane();
-		VBox.setVgrow(audioScrollPane, Priority.ALWAYS);
-		
-		scrollContentPane = new VBox(10);
-		scrollContentPane.setPadding(new Insets(10));
-		
-		audioScrollPane.setContent(scrollContentPane);
-		audioScrollPane.setHbarPolicy(ScrollBarPolicy.NEVER);
-		VBox.setVgrow(audioScrollPane, Priority.ALWAYS);
+		updateAudioFileList();
 		
 		TextField creationNameField = new TextField();
 		creationNameField.setPromptText("Creation name..");
@@ -237,12 +232,14 @@ public class WikiCreationMenu {
 		HBox saveLayout = new HBox(10);
 		saveLayout.getChildren().setAll(creationNameField, saveCreationButton);
 		
-		creationLayout.getChildren().setAll(audioScrollPane, saveLayout);
+		creationLayout.getChildren().setAll(audioListView, saveLayout);
 				
 		// END CREATION MENU LAYOUT //
 		
 		menuLayout.getChildren().setAll(editorLayout, horizSeparator, creationLayout);
 		rootLayout.getChildren().setAll(menuLayout);
+		
+		
 		
 		Scene scene = new Scene(rootLayout);	
 		
@@ -262,7 +259,7 @@ public class WikiCreationMenu {
 		Task<String> audioTask = new CreateAudioFileTask(text, name);
 		audioTask.setOnSucceeded((e) -> {
 
-			updateAudioFileList("");
+			updateAudioFileList();
 
 		});
 		
@@ -278,9 +275,9 @@ public class WikiCreationMenu {
 		
 	}
 	
-	private static void updateAudioFileList(String searchTerm) {
-		
-		String cmd = "ls audio/ | grep \"" + searchTerm + "\"";
+	private static void updateAudioFileList() {
+				
+		String cmd = "ls audio/ | grep \".wav\"";
 		try {
 			
 			ProcessBuilder builder = new ProcessBuilder("bash", "-c", cmd);
@@ -289,13 +286,17 @@ public class WikiCreationMenu {
 			InputStream stdout = process.getInputStream();
 			BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(stdout));
 			
+			List<AudioFileHBoxCell> list = new ArrayList<AudioFileHBoxCell>();
+			
 			String fileName;
 			while ((fileName = bufferedReader.readLine()) != null) {
 				
-				fileName = fileName.split(".")[0];  // remove extension
-				System.out.println(fileName);
+				list.add(new AudioFileHBoxCell(fileName));
 				
 			}
+			
+			ObservableList<AudioFileHBoxCell> observableList = FXCollections.observableList(list);
+			audioListView.setItems(observableList);
 			
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -303,24 +304,53 @@ public class WikiCreationMenu {
 		
 	}
 	
-	private static HBox createAudioMenuItem(String name, String dateModified) {
+	
+	private static class AudioFileHBoxCell extends HBox {
 		
-		Label nameLabel = new Label(name),
-			  dateLabel = new Label(dateModified);
+		Label nameLabel;
+		Pane spacer;
+		Button playButton, deleteButton;
 		
-		VBox labelContainer = new VBox(5);
-		labelContainer.getChildren().setAll(nameLabel, dateLabel);
-		
-		Button playButton = new Button("Play"),
-			   deleteButton = new Button("Delete");
-		
-		Pane spacer = new Pane();
-		HBox.setHgrow(spacer, Priority.ALWAYS);
-		
-		HBox menuItem = new HBox(10);
-		menuItem.getChildren().setAll(labelContainer, spacer, playButton, deleteButton);
-		
-		return menuItem;
+		public AudioFileHBoxCell(String fileName) {
+			
+			super(10);
+			this.setPadding(new Insets(3));
+			this.setAlignment(Pos.CENTER_LEFT);
+			
+			nameLabel = new Label(fileName);
+			
+			spacer = new Pane();
+			HBox.setHgrow(spacer, Priority.ALWAYS);
+			
+			playButton = new Button("Play");
+			playButton.setOnAction((e) -> {
+				Media audio = new Media(new File("audio/" + fileName).toURI().toString());
+				if (currentAudioPreview != null) {
+					currentAudioPreview.stop();
+				}
+				currentAudioPreview = new MediaPlayer(audio);
+				currentAudioPreview.setOnError(() -> {
+					System.out.println("help");
+				});
+				currentAudioPreview.play();
+			});
+			
+			deleteButton = new Button("Delete");
+			deleteButton.setOnAction((e) -> {
+				
+				ProcessBuilder builder = new ProcessBuilder("rm", "audio/" + fileName);
+				try {
+					builder.start().waitFor();
+				} catch (InterruptedException | IOException e_) {
+					e_.printStackTrace();
+				}
+				updateAudioFileList();
+				
+			});
+			
+			this.getChildren().setAll(nameLabel, spacer, playButton, deleteButton);
+			
+		}
 		
 	}
 	

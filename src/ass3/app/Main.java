@@ -14,7 +14,7 @@ public class Main extends Application {
 	@Override
 	public void start(Stage mainStage) throws Exception {
 		
-		WikiCreationMenu.createWindow(mainStage);
+		WikiCreationMenu.createWindow(mainStage, null);
 		
 	}
 
