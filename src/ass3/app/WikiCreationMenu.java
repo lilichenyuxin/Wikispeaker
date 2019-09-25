@@ -44,7 +44,7 @@ public class WikiCreationMenu {
 	
 	private static VBox scrollContentPane;
 	
-	public static void createWindow(Stage parentStage) {
+	public static void createWindow(Stage parentStage, String wikiText) {
 				
 		VBox rootLayout = new VBox(10);
 		rootLayout.setPadding(new Insets(10));
@@ -107,7 +107,7 @@ public class WikiCreationMenu {
 		utilityBar.getChildren().setAll(synthesiserDropdown, voiceDropdown, spacer, previewButton, audioNameField, saveButton);
 		
 		TextArea wikiTextArea = new TextArea();
-		wikiTextArea.setText(dummyText);
+		wikiTextArea.setText((wikiText != null) ? wikiText : dummyText);
 		wikiTextArea.setWrapText(true);
 		wikiTextArea.setMinHeight(400);
 		VBox.setVgrow(wikiTextArea, Priority.ALWAYS);
