@@ -183,12 +183,14 @@ public class WikiCreationMenu {
 			// check if file with specified name exists
 			try {
 				
-				ProcessBuilder builder = new ProcessBuilder("test", "-e", "audio/" + audioNameField.getText());
+				ProcessBuilder builder = new ProcessBuilder("test", "-e", "audio/" + audioNameField.getText() + ".wav");
 				int fileExists = builder.start().waitFor();
+				
+				System.out.println(fileExists);
 				
 				if (fileExists == 0) {
 					Alert alert = new Alert(AlertType.CONFIRMATION, "Would you like to overwrite it?", 
-																	ButtonType.YES, ButtonType.NO);
+																	ButtonType.NO, ButtonType.YES);
 					alert.setHeaderText("File with that name already exists");
 					alert.showAndWait();
 					if (alert.getResult() != ButtonType.YES) {
