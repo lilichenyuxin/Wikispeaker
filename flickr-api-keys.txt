@@ -1,0 +1,2 @@
+apiKey = 7c000c5574bec2fd77aa20ea734382f7
+sharedSecret = 38fdcb5bae6dd72c
