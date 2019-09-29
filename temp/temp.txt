@@ -1,4 +1,6 @@
+file '1.wav'
+file '2.wav'
 file '3.wav'
-file 'reeee.wav'
-file 'xd.wav'
+file '4.wav'
+file '5.wav'
 

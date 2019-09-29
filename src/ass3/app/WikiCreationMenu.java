@@ -66,7 +66,7 @@ public class WikiCreationMenu {
 	private static ListView<AudioFileHBoxCell> audioFileListView = new ListView<>();
 	private static MediaPlayer currentAudioPreview = null;	
 	
-	public static void createWindow(Stage parentStage, String wikiTerm, String wikiText) {
+	public static void createWindow(MainMenu mainMenu, Stage parentStage, String wikiTerm, String wikiText) {
 				
 		VBox rootLayout = new VBox(10);
 		rootLayout.setPadding(new Insets(10));
@@ -355,6 +355,7 @@ public class WikiCreationMenu {
 				progressBar.setProgress(0);
 				Alert alert = new Alert(AlertType.INFORMATION, "Creation '" + creationName + "' created successfully.");
 				alert.show();
+				mainMenu.updateCreationList();
 			});
 			
 			Service<String> creationService = new Service<String>() {

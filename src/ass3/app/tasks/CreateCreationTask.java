@@ -83,7 +83,7 @@ public class CreateCreationTask extends Task<String> {
 		
 		// create slideshow
 		String frameRate = Double.toString( 1 / (durationInSeconds / _numImages) );
-		command = "ffmpeg -framerate " + frameRate + " -i 'temp/image%d.jpg' -vf scale=-2:400 -r 25 temp/slideshow.mp4";
+		command = "cat temp/image*.jpg | ffmpeg -framerate " + frameRate + " -f image2pipe -i - -vf scale=-2:400 -r 25 temp/slideshow.mp4";
 		pb.command("bash", "-c", command);
 		System.out.println(pb.start().waitFor());
 		
