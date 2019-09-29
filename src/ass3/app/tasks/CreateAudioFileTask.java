@@ -125,7 +125,6 @@ public class CreateAudioFileTask extends Task<String> {
 			// use desired synthesiser
 			if (_synth == Synthesiser.Festival) {
 				command = "text2wave -o \"" + filePath + "\" \"temp/temp.txt\" -eval \"tts/festival_voices/" + _synth.getArgument(_voice) + "\"";
-				System.out.println(command);
 			} else {
 				command = "echo \"" + _text + "\" | espeak --stdin -v" + _synth.getArgument(_voice) + " -w \"" + filePath + "\"";
 			}
