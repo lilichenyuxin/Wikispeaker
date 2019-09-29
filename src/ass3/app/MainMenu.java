@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
 import javafx.application.Application;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
@@ -28,6 +29,7 @@ import javafx.scene.control.ProgressBar;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.KeyCode;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.BorderPane;
@@ -41,6 +43,7 @@ import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
 import javafx.scene.media.MediaPlayer.Status;
 import javafx.scene.media.MediaView;
+import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import javafx.util.Callback;
 import javafx.util.Duration;
@@ -127,14 +130,15 @@ public class MainMenu extends Application{
 	private Scene s = new Scene(_layout, 900, 400);
 	private Label time = new Label();
 	private ProgressBar pb  = new ProgressBar();
-	private Button mute = new Button("Mute");
-	private Button pause = new Button("Pause");
-	private Button forward = new Button(">>");
-	private Button backward = new Button("<<");
+	private Button mute = new Button();
+	private Button pause = new Button();
+	private Button forward = new Button();
+	private Button backward = new Button();
 
 	public MainMenu(){
-		_wikibutton = new Button("Search");
-		_creationbutton = new Button("Search");
+		
+		_wikibutton = new Button();
+		_creationbutton = new Button();
 		_wikilable = new Label("Wiki search:");
 		_creationlable = new Label("Filter creations:");
 		_wikisearch = new TextField();
@@ -142,19 +146,25 @@ public class MainMenu extends Application{
 		_creationsearch = new TextField();
 		HBox.setHgrow(_creationsearch, Priority.ALWAYS);
 	}
+	
 
 	@Override
 	public void start(Stage primaryStage) throws Exception {
 		
-		System.err.close();
-		
 		loadImages();
+		
 		_layout.setPadding(new Insets(5));
 		
 		dir.mkdir();
 
 		HBox wikiSearchLayout = new HBox(10);
 		wikiSearchLayout.setAlignment(Pos.CENTER);
+		
+		_wikibutton.setGraphic(new ImageView(imageManager.getImage("search")));
+		_wikibutton.setDisable(true);
+		
+		_creationbutton.setGraphic(new ImageView(imageManager.getImage("refresh")));
+		
 		wikiSearchLayout.getChildren().addAll(_wikilable, _wikisearch, _wikibutton);
 		
 		Separator horizSeparator = new Separator();
@@ -175,29 +185,42 @@ public class MainMenu extends Application{
 		_mediaView.fitHeightProperty().bind(_mediaViewLayout.heightProperty());
 
 		mute.setMinWidth(Control.USE_PREF_SIZE);
+		mute.setStyle("-fx-background-color: rgba(0,0,0,0)");
+		mute.setGraphic(new ImageView(imageManager.getImage("mediaNotMuted")));
+		
 		pause.setMinWidth(Control.USE_PREF_SIZE);
+		pause.setStyle("-fx-background-color: rgba(0,0,0,0)");
+		pause.setGraphic(new ImageView(imageManager.getImage("mediaPlay")));
+		
 		forward.setMinWidth(Control.USE_PREF_SIZE);
+		forward.setStyle("-fx-background-color: rgba(0,0,0,0)");
+		forward.setGraphic(new ImageView(imageManager.getImage("mediaFowards")));
+		
 		backward.setMinWidth(Control.USE_PREF_SIZE);
+		backward.setStyle("-fx-background-color: rgba(0,0,0,0)");
+		backward.setGraphic(new ImageView(imageManager.getImage("mediaBackwards")));
 		
 		pause.setOnAction(new EventHandler<ActionEvent>() {
 			@Override public void handle(ActionEvent event) {
-				MediaPlayer MP = _mediaView.getMediaPlayer();
-				System.out.println("1");
-				if (MP.getStatus() == Status.PLAYING) {
-					System.out.println("2");
-					MP.pause();
-					pause.setText("Play");
-				} else {
-					System.out.println("3");
-					MP.play();
-					pause.setText("Pause");
+				if (_mediaView.getMediaPlayer() == null) {
+					return;
 				}
-				System.out.println("4");
+				MediaPlayer MP = _mediaView.getMediaPlayer();
+				if (MP.getStatus() == Status.PLAYING) {
+					pause.setGraphic(new ImageView(imageManager.getImage("mediaPlay")));
+					MP.pause();
+				} else {
+					pause.setGraphic(new ImageView(imageManager.getImage("mediaPause")));
+					MP.play();
+				}
 			}
 		});
 
 		forward.setOnAction(new EventHandler<ActionEvent>() {
 			@Override public void handle(ActionEvent event) {
+				if (_mediaView.getMediaPlayer() == null) {
+					return;
+				}
 				MediaPlayer MP = _mediaView.getMediaPlayer();
 				MP.seek(MP.getCurrentTime().add(Duration.seconds(2)));
 			}
@@ -205,12 +228,16 @@ public class MainMenu extends Application{
 
 		backward.setOnAction(new EventHandler<ActionEvent>() {
 			@Override public void handle(ActionEvent event) {
+				if (_mediaView.getMediaPlayer() == null) {
+					return;
+				}
 				MediaPlayer MP = _mediaView.getMediaPlayer();
 				MP.seek(MP.getCurrentTime().add(Duration.seconds(-2)));
 			}
 		});
 		
-		time = new Label("00:00");
+		time.setText("0:00:00");
+		time.setTextFill(Color.WHITE);
 
 		//Listener of progress bar and time.
 		pb = new ProgressBar(0);
@@ -219,24 +246,36 @@ public class MainMenu extends Application{
 		
 		mute.setOnAction(new EventHandler<ActionEvent>() {
 			@Override public void handle(ActionEvent event) {
+				
+				if (_mediaView.getMediaPlayer() == null) {
+					return;
+				}
 				// toggle mute
-				_mediaView.getMediaPlayer().setMute(!_mediaView.getMediaPlayer().isMute());
+				boolean isMute = _mediaView.getMediaPlayer().isMute();
+				_mediaView.getMediaPlayer().setMute(!isMute);
+				if (isMute) {
+					mute.setGraphic(new ImageView(imageManager.getImage("mediaNotMuted")));
+				} else {
+					mute.setGraphic(new ImageView(imageManager.getImage("mediaMuted")));
+				}
+				
 			}
 		});
 		
-		VBox _mediaControlsContainer = new VBox();
+		VBox mediaControlsContainer = new VBox();
 		Pane controlsSpacer = new Pane();
 		VBox.setVgrow(controlsSpacer, Priority.ALWAYS);
 
-		HBox _mediaControlsLayout = new HBox(5);
-		_mediaControlsLayout.setMaxWidth(Double.MAX_VALUE);
-		_mediaControlsLayout.setAlignment(Pos.CENTER);
-		_mediaControlsLayout.getChildren().addAll(pause, backward, forward, time, pb, mute);
+		HBox mediaControlsLayout = new HBox(5);
+		mediaControlsLayout.setStyle("-fx-background-color: rgba(0,0,0,0.5)");
+		mediaControlsLayout.setMaxWidth(Double.MAX_VALUE);
+		mediaControlsLayout.setAlignment(Pos.CENTER);
+		mediaControlsLayout.getChildren().addAll(pause, backward, forward, time, pb, mute);
 		
-		_mediaControlsContainer.getChildren().setAll(controlsSpacer, _mediaControlsLayout);
+		mediaControlsContainer.getChildren().setAll(controlsSpacer, mediaControlsLayout);
 		
 		_mediaViewLayout.setAlignment(Pos.CENTER);
-		_mediaViewLayout.getChildren().add(_mediaControlsContainer);
+		_mediaViewLayout.getChildren().add(mediaControlsContainer);
 				
 		// END MEDIA VIEW
 
@@ -269,6 +308,13 @@ public class MainMenu extends Application{
 		primaryStage.heightProperty().addListener((obsValue, oldValue, newValue) -> {
 			_mediaViewLayout.setPrefHeight(_mediaViewLayout.getPrefHeight() + (double) newValue - (double) oldValue); 
 		});
+		
+		_wikisearch.setOnKeyReleased((e) -> {
+			_wikibutton.setDisable(_wikisearch.getText().length() == 0);
+			if (e.getCode() == KeyCode.ENTER) {
+				_wikibutton.fire();
+			}
+		});
 
 
 		//When click wiki search button
@@ -292,6 +338,7 @@ public class MainMenu extends Application{
 					Wiki wiki = new Wiki(_txt);
 
 					wiki.setOnSucceeded((e) -> {
+						System.err.close();
 						WikiCreationMenu.createWindow(MainMenu.this, primaryStage, _txt, wiki.getValue());
 					});
 
@@ -420,12 +467,25 @@ public class MainMenu extends Application{
 		
 		imageManager = new ImageManager();
 		
+		// general button icons
 		imageManager.loadImage("play", "resources/play.png", 15, 15);
 		imageManager.loadImage("delete", "resources/delete.png", 15, 15);
 		imageManager.loadImage("refresh", "resources/refresh.png", 15, 15);
 		imageManager.loadImage("search", "resources/search.png", 15, 15);
 		imageManager.loadImage("save", "resources/save.png", 15, 15);
 		imageManager.loadImage("add", "resources/add.png", 15, 15);
+		imageManager.loadImage("shiftDown", "resources/shiftDownIcon.png", 10, 10);
+		imageManager.loadImage("shiftUp", "resources/shiftUpIcon.png", 10, 10);
+		
+		// media player icons
+		imageManager.loadImage("mediaPlay", "resources/videoPlayerPlayIcon.png", 25, 25);
+		imageManager.loadImage("mediaPause", "resources/videoPlayerPauseIcon.png", 30, 30);
+		imageManager.loadImage("mediaMuted", "resources/mutedIcon.png", 30, 30);
+		imageManager.loadImage("mediaNotMuted", "resources/unMutedIcon.png", 30, 30);
+		imageManager.loadImage("mediaFowards", "resources/skipFowardsIcon.png", 30, 30);
+		imageManager.loadImage("mediaBackwards", "resources/skipBackwardsIcon.png", 30, 30);
+		
+
 		
 	}
 }

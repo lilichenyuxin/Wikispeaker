@@ -123,14 +123,16 @@ public class WikiCreationMenu {
 			voiceDropdown.getSelectionModel().selectFirst();
 		});
 		
-		Button previewButton = new Button("Preview selection");
+		Button previewButton = new Button();
+		previewButton.setGraphic(new ImageView(mainMenu.getImageManager().getImage("play")));
 		previewButton.setMinWidth(Control.USE_PREF_SIZE);
 		previewButton.setDisable(true);
 		
 		TextField audioNameField = new TextField();
 		audioNameField.setPromptText("Audio file name..");
 		
-		Button saveButton = new Button("Create audio file");
+		Button saveButton = new Button();
+		saveButton.setGraphic(new ImageView(mainMenu.getImageManager().getImage("save")));
 		saveButton.setMinWidth(Control.USE_PREF_SIZE);
 		saveButton.setDisable(true);
 				
@@ -336,7 +338,8 @@ public class WikiCreationMenu {
 		ComboBox<Integer> numImagesDropdown = new ComboBox<>(numImagesOptions);
 		numImagesDropdown.getSelectionModel().selectFirst();
 		
-		Button saveCreationButton = new Button("Save Creation");
+		Button saveCreationButton = new Button();
+		saveCreationButton.setGraphic(new ImageView(mainMenu.getImageManager().getImage("save")));
 		saveCreationButton.setOnAction((e) -> {
 			
 			String creationName = creationNameField.getText();
@@ -597,12 +600,6 @@ public class WikiCreationMenu {
 			
 			addButton.setOnAction((e) -> {
 				
-				for (AudioFileHBoxCell cell : listViewToAddTo.getItems()) {
-					if (cell.getAudioFileName().equals(audioFileName)) {
-						return;
-					}
-				}
-				
 				AudioFileHBoxCell cell = new ShiftableAudioFileHBoxCell(listViewToAddTo, audioFileName);
 				listViewToAddTo.getItems().add(cell);
 					
@@ -619,9 +616,6 @@ public class WikiCreationMenu {
 		
 		private VBox shiftButtonContainer;
 		private Button shiftUpButton, shiftDownButton;   // allow rearranging of audio file list
-				
-		private final Image shiftUpIcon   = new Image(getClass().getResourceAsStream("resources/shiftUpIcon.png"));
-		private final Image shiftDownIcon = new Image(getClass().getResourceAsStream("resources/shiftDownIcon.png"));
 		
 		public ShiftableAudioFileHBoxCell(ListView<AudioFileHBoxCell> listView, String audioFileName) {
 			
@@ -671,7 +665,8 @@ public class WikiCreationMenu {
 			shiftButton.setOnAction((e) -> {
 				shift(dir);
 			});
-			shiftButton.setGraphic(new ImageView((dir < 0) ? shiftUpIcon : shiftDownIcon));
+			ImageManager im = mainMenu.getImageManager();
+			shiftButton.setGraphic(new ImageView((dir < 0) ? im.getImage("shiftUp") : im.getImage("shiftDown")));
 			shiftButton.setPadding(new Insets(3, 4, 3, 4));
 			
 			return shiftButton;

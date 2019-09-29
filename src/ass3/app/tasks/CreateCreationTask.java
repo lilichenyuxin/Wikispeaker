@@ -42,7 +42,7 @@ public class CreateCreationTask extends Task<String> {
 		// delete preexisting temp and creation files
 		command = "rm " + _filePathToSaveTo + " temp/*";
 		ProcessBuilder pb = new ProcessBuilder("bash", "-c", command);
-		System.out.println(pb.start().waitFor());
+		pb.start().waitFor();
 
 		// create text file to store paths of audio files
 		String textFileContents = "";
@@ -50,7 +50,7 @@ public class CreateCreationTask extends Task<String> {
 			textFileContents += "file '" + filePath + "'\n";
 		}
 		pb.command("bash", "-c", "echo \"" + textFileContents + "\" > temp/temp.txt");
-		System.out.println(pb.start().waitFor());
+		pb.start().waitFor();
 		
 		// copy audio files to temp directory
 		command = "cp audio/*.wav temp/";
@@ -63,7 +63,7 @@ public class CreateCreationTask extends Task<String> {
 		// concatenate audio files and save
 		command = "ffmpeg -f concat -i temp/temp.txt -c copy temp/audio.wav";
 		pb.command("bash", "-c", command);
-		System.out.println(pb.start().waitFor());
+		pb.start().waitFor();
 		
 		updateProgress(2, 5);
 		updateMessage("Retrieving images...");
@@ -85,21 +85,21 @@ public class CreateCreationTask extends Task<String> {
 		String frameRate = Double.toString( 1 / (durationInSeconds / _numImages) );
 		command = "cat temp/image*.jpg | ffmpeg -framerate " + frameRate + " -f image2pipe -i - -vf scale=-2:400 -r 25 temp/slideshow.mp4";
 		pb.command("bash", "-c", command);
-		System.out.println(pb.start().waitFor());
+		pb.start().waitFor();
 		
 		// overlay text on slideshow
 		command = "ffmpeg -i temp/slideshow.mp4 -vf \"drawtext=fontfile=comicsans.ttf:fontsize=30:" +
 				  "fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:text='" + _wikiTerm + "'\" temp/textslideshow.mp4";
 		pb.command("bash", "-c", command);
-		System.out.println(pb.start().waitFor());
-		
+		pb.start().waitFor();
+
 		updateProgress(4, 5);
 		updateMessage("Merging slideshow and audio...");
 		
 		// merge video and audio
 		command = "ffmpeg -i temp/textslideshow.mp4 -i temp/audio.wav -c:v copy -c:a aac -strict experimental " + _filePathToSaveTo;
 		pb.command("bash", "-c", command);
-		System.out.println(pb.start().waitFor());
+		pb.start().waitFor();
 		
 		updateProgress(5, 5);
 		updateMessage("Finished!");
