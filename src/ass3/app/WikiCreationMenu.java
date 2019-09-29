@@ -12,6 +12,7 @@ import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import ass3.app.tasks.CreateAudioFileTask;
 import ass3.app.tasks.CreateAudioFileTask.Synthesiser;
@@ -24,6 +25,7 @@ import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
@@ -64,10 +66,26 @@ import javafx.stage.Stage;
 public class WikiCreationMenu {
 	
 	private static ListView<AudioFileHBoxCell> audioFileListView = new ListView<>();
+	private static ListView<AudioFileHBoxCell> creationAudioFileListView = new ListView<>();
 	private static MediaPlayer currentAudioPreview = null;	
+	private static MainMenu mainMenu;
 	
 	public static void createWindow(MainMenu mainMenu, Stage parentStage, String wikiTerm, String wikiText) {
+		
+		WikiCreationMenu.mainMenu = mainMenu;
 				
+		// DELETE PRE-EXISTING AUDIO FILES
+		
+		String cmd = "rm audio/*";
+		ProcessBuilder pb = new ProcessBuilder("bash", "-c", cmd);
+		try {
+			pb.start().waitFor();
+		} catch (InterruptedException | IOException e1) {
+			e1.printStackTrace();
+		}
+		
+		// GUI LAYOUTS
+		
 		VBox rootLayout = new VBox(10);
 		rootLayout.setPadding(new Insets(10));
 				
@@ -122,7 +140,8 @@ public class WikiCreationMenu {
 		utilityBar.getChildren().setAll(synthesiserDropdown, voiceDropdown, spacer, previewButton, audioNameField, saveButton);
 		
 		TextArea wikiTextArea = new TextArea();
-		wikiTextArea.setText((wikiText != null) ? wikiText : dummyText);
+		wikiTextArea.setText(wikiText);
+		wikiTextArea.setStyle("-fx-text-alignment: justify");
 		wikiTextArea.setWrapText(true);
 		wikiTextArea.setMinHeight(400);
 		VBox.setVgrow(wikiTextArea, Priority.ALWAYS);
@@ -154,12 +173,12 @@ public class WikiCreationMenu {
 			String[] words = text.split(" ");
 			int numWords = words.length - ((text.length() == 0) ? 1 : 0);  // no text counts as one word for some reason (newline?)
 			
-			boolean disable = (numWords == 0 || numWords > 40) || audioNameField.getText().length() == 0;
+			boolean invalidNumWords = numWords == 0 || numWords > 40;
 			
-			saveButton.setDisable(numWords == 0 || numWords > 40);
-			previewButton.setDisable(numWords == 0 || numWords > 40);
+			saveButton.setDisable(invalidNumWords || audioNameField.getText().length() == 0);
+			previewButton.setDisable(invalidNumWords);
 			
-			if (numWords == 0 || numWords > 40) {
+			if (invalidNumWords) {
 				numCharactersText.setFill(Color.RED);
 			} else {
 				numCharactersText.setFill(Color.web("333333"));
@@ -301,6 +320,11 @@ public class WikiCreationMenu {
 		audioFileListView.setSelectionModel(new NoSelectionModel<>());
 		audioFileListView.setFocusTraversable(false);
 		
+		VBox.setVgrow(creationAudioFileListView, Priority.ALWAYS);
+		creationAudioFileListView.setItems(FXCollections.observableArrayList());
+		creationAudioFileListView.setSelectionModel(new NoSelectionModel<>());
+		creationAudioFileListView.setFocusTraversable(false);
+				
 		TextField creationNameField = new TextField();
 		creationNameField.setPromptText("Creation name..");
 		HBox.setHgrow(creationNameField, Priority.ALWAYS);
@@ -339,7 +363,7 @@ public class WikiCreationMenu {
 			
 			
 			List<String> audioFilePaths = new ArrayList<String>();
-			for (AudioFileHBoxCell cell : audioFileListView.getItems()) {
+			for (AudioFileHBoxCell cell : creationAudioFileListView.getItems()) {
 				audioFilePaths.add(cell.getAudioFileName());
 			}
 			
@@ -373,32 +397,46 @@ public class WikiCreationMenu {
 		});
 		saveCreationButton.setDisable(true);
 		
+		creationAudioFileListView.getItems().addListener((new ListChangeListener<AudioFileHBoxCell>() {
+
+			@Override
+			public void onChanged(Change<? extends AudioFileHBoxCell> arg0) {
+				
+				boolean disable = creationAudioFileListView.getItems().isEmpty() || creationNameField.getText().length() == 0;
+				saveCreationButton.setDisable(disable);
+				
+			}
+			
+		}));
+		
 		creationNameField.setOnKeyReleased((e) -> {
-			if (e.getCode() == KeyCode.ENTER) {
+			if (e.getCode() == KeyCode.ENTER && !saveCreationButton.isDisabled()) {
 				saveCreationButton.fire();
 			}
 		});
 		
 		// if name field empty don't allow them to click save creation
 		creationNameField.textProperty().addListener((c) -> {
-			saveCreationButton.setDisable(creationNameField.getText().length() == 0);
+			
+			boolean disable = creationAudioFileListView.getItems().isEmpty() || creationNameField.getText().length() == 0;
+			saveCreationButton.setDisable(disable);
+		
 		});
 		
 		HBox saveLayout = new HBox(10);
 		saveLayout.getChildren().setAll(creationNameField, numImagesDropdown, saveCreationButton);
 		
-		creationLayout.getChildren().setAll(audioFileListView, saveLayout);
+		creationLayout.getChildren().setAll(creationAudioFileListView, saveLayout);
 				
 		// END CREATION MENU LAYOUT //
 		
-		menuLayout.getChildren().setAll(editorLayout, horizSeparator, creationLayout);
+		menuLayout.getChildren().setAll(editorLayout, horizSeparator, audioFileListView, creationLayout);
 		rootLayout.getChildren().setAll(menuLayout);
 		
-		Scene scene = new Scene(rootLayout);	
+		Scene scene = new Scene(rootLayout);
 		
 		Stage window = new Stage();
 		window.initOwner(parentStage);
-		window.initModality(Modality.APPLICATION_MODAL);
 		window.setScene(scene);
 		window.sizeToScene();
 		window.show();
@@ -445,7 +483,7 @@ public class WikiCreationMenu {
 				}
 				
 				if (!exists) {
-					updatedList.add(new AudioFileHBoxCell(audioFileName));
+					updatedList.add(new AddableAudioFileHBoxCell(audioFileListView, creationAudioFileListView, audioFileName));
 				}
 				
 			}
@@ -460,45 +498,51 @@ public class WikiCreationMenu {
 	
 	public static class AudioFileHBoxCell extends HBox {
 		
-		private Label nameLabel;
-		private Pane spacer;
-		private Button playButton, deleteButton;
-		
-		private VBox shiftButtonContainer;
-		private Button shiftUpButton, shiftDownButton;   // allow rearranging of audio file list
-		
-		private final Image shiftUpIcon   = new Image(getClass().getResourceAsStream("resources/shiftUpIcon.png"));
-		private final Image shiftDownIcon = new Image(getClass().getResourceAsStream("resources/shiftDownIcon.png"));
-		
-		public AudioFileHBoxCell(String audioFileName) {
+		protected Label nameLabel;
+		protected Pane spacer;
+		protected Button playButton, deleteButton;
+		protected ListView<AudioFileHBoxCell> _listView;
+			
+		public AudioFileHBoxCell(ListView<AudioFileHBoxCell> listView, String audioFileName) {
 			
 			super(8);
+			_listView = listView;
 			setAlignment(Pos.CENTER);
 			setPadding(new Insets(3));
-						
-			shiftButtonContainer = new VBox(5);
-			shiftUpButton = createShiftButton(-1);
-			shiftDownButton = createShiftButton(1);
-			
-			shiftButtonContainer.getChildren().addAll(shiftUpButton, shiftDownButton);			
 			
 			nameLabel = new Label(audioFileName);
 			
 			spacer = new Pane();
 			HBox.setHgrow(spacer,  Priority.ALWAYS);
 			
-			playButton = new Button("Play");
+			playButton = new Button();
+			playButton.setGraphic(new ImageView(mainMenu.getImageManager().getImage("play")));
 			playButton.setOnAction((e) -> {
+				
+				if (currentAudioPreview != null) {
+					currentAudioPreview.stop();
+				}
 				
 				Media audio = new Media(new File("audio", audioFileName).toURI().toString());
 				currentAudioPreview = new MediaPlayer(audio);
 				currentAudioPreview.play();
 				
 			});
-			playButton.setOnMouseEntered((e) -> e.consume());
+			playButton.setMinSize(playButton.USE_PREF_SIZE, playButton.USE_PREF_SIZE);
 			
-			deleteButton = new Button("Delete");
+			deleteButton = new Button();
+			deleteButton.setGraphic(new ImageView(mainMenu.getImageManager().getImage("delete")));
 			deleteButton.setOnAction((e) -> {
+				
+				Alert confirmDialog = new Alert(AlertType.CONFIRMATION);
+				confirmDialog.setHeaderText("Are you sure you want to delete this audio file?");
+				confirmDialog.setContentText("Are you sure you want to delete \"" + audioFileName + "?");
+				confirmDialog.setTitle("Confirm deletion");
+				
+				Optional<ButtonType> response = confirmDialog.showAndWait();
+				if (!response.get().equals(ButtonType.OK)) {
+					return;
+				}
 				
 				try {
 					
@@ -514,7 +558,7 @@ public class WikiCreationMenu {
 			deleteButton.setOnMouseEntered((e) -> e.consume());
 
 									
-			getChildren().addAll(shiftButtonContainer, nameLabel, spacer, playButton, deleteButton);
+			getChildren().addAll(nameLabel, spacer, playButton, deleteButton);
 			
 		}
 		
@@ -538,9 +582,72 @@ public class WikiCreationMenu {
 			nameLabel.setText(name);
 		}
 		
+	}
+	
+	public static class AddableAudioFileHBoxCell extends AudioFileHBoxCell {
+		
+		private Button addButton;
+
+		public AddableAudioFileHBoxCell(ListView<AudioFileHBoxCell> listView, ListView<AudioFileHBoxCell> listViewToAddTo, String audioFileName) {
+			
+			super(listView, audioFileName);
+			
+			addButton = new Button();
+			addButton.setGraphic(new ImageView(mainMenu.getImageManager().getImage("add")));
+			
+			addButton.setOnAction((e) -> {
+				
+				for (AudioFileHBoxCell cell : listViewToAddTo.getItems()) {
+					if (cell.getAudioFileName().equals(audioFileName)) {
+						return;
+					}
+				}
+				
+				AudioFileHBoxCell cell = new ShiftableAudioFileHBoxCell(listViewToAddTo, audioFileName);
+				listViewToAddTo.getItems().add(cell);
+					
+			});
+			
+			this.getChildren().add(addButton);
+			
+		}
+		
+	}
+	
+	// class to represent each cell of the list view
+	public static class ShiftableAudioFileHBoxCell extends AudioFileHBoxCell {
+		
+		private VBox shiftButtonContainer;
+		private Button shiftUpButton, shiftDownButton;   // allow rearranging of audio file list
+				
+		private final Image shiftUpIcon   = new Image(getClass().getResourceAsStream("resources/shiftUpIcon.png"));
+		private final Image shiftDownIcon = new Image(getClass().getResourceAsStream("resources/shiftDownIcon.png"));
+		
+		public ShiftableAudioFileHBoxCell(ListView<AudioFileHBoxCell> listView, String audioFileName) {
+			
+			super(listView, audioFileName);
+			
+			deleteButton.setOnAction((e) -> {
+				_listView.getItems().remove(this);
+			});
+						
+			shiftButtonContainer = new VBox(5);
+			shiftUpButton = createShiftButton(-1);
+			shiftDownButton = createShiftButton(1);
+			
+			shiftButtonContainer.getChildren().addAll(shiftUpButton, shiftDownButton);	
+			
+			ObservableList<Node> tempList = FXCollections.observableArrayList(
+					shiftButtonContainer
+			);
+			tempList.addAll(this.getChildren());
+			this.getChildren().setAll(tempList);
+				
+		}
+		
 		private void shift(int dir) {
 			
-			ObservableList<AudioFileHBoxCell> items = audioFileListView.getItems();
+			ObservableList<AudioFileHBoxCell> items = _listView.getItems();
 			
 			int thisIndex = items.indexOf(this),
 				otherIndex = thisIndex + dir;
@@ -573,6 +680,7 @@ public class WikiCreationMenu {
 		
 	}
 	
+	// simply a selection model class to prevent any list item being selected in the list view
 	public static class NoSelectionModel<T> extends MultipleSelectionModel<T> {
 
 	    @Override
@@ -640,17 +748,4 @@ public class WikiCreationMenu {
 	    }
 	}
 	
-	
-	
-	private static String dummyText = 
-			"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam finibus placerat nulla, ac pretium est efficitur a. Aliquam ultricies rutrum dignissim. Fusce non purus et dolor tristique rutrum. Aliquam convallis ornare est vitae condimentum. Pellentesque maximus vel urna ut auctor. Ut et lorem eu diam mattis posuere. Donec a aliquam magna, ac tempus orci. Nam a justo sit amet lectus iaculis facilisis. Aliquam enim orci, ultricies vitae nisi vel, tempor maximus urna. Quisque est risus, mattis in lacus ut, tempor faucibus ligula. Maecenas non accumsan nisl, id tincidunt nisl. Donec varius auctor lacus a semper. Vivamus dolor est, volutpat at accumsan vitae, semper a leo. Fusce eget commodo neque. Vivamus efficitur tempor fringilla. Fusce at mattis purus.\n" + 
-			"\n" + 
-			"Sed consequat lacinia ex nec consequat. Vestibulum a condimentum ligula, quis finibus nulla. Ut sit amet ante nec massa rhoncus fermentum et a tortor. Fusce suscipit justo sed nunc malesuada, nec placerat justo ullamcorper. Nulla rhoncus leo nec ultricies vulputate. Ut bibendum, sem non placerat congue, orci neque ullamcorper neque, in maximus nunc enim in est. Cras non pulvinar arcu. Etiam interdum tempor tristique. Vestibulum ornare iaculis erat a scelerisque. Ut varius mi tellus, sit amet dictum tellus posuere eu. Nulla vitae tincidunt odio, in cursus sem.\n" + 
-			"\n" + 
-			"Phasellus dictum euismod massa et elementum. Morbi vestibulum congue enim, ut rutrum diam mollis ut. Nulla facilisi. Pellentesque dapibus mollis congue. Curabitur laoreet id libero eget elementum. Nam aliquet risus non massa vestibulum faucibus in et nunc. In porta finibus bibendum. Nunc vel mi turpis. Etiam luctus iaculis aliquam. Ut tincidunt ipsum et magna fringilla, sed convallis sem volutpat.\n" + 
-			"\n" + 
-			"Nullam congue vitae lorem imperdiet tempor. Pellentesque augue lacus, tempor ut velit vel, tempor dictum tellus. Suspendisse potenti. Quisque dictum tellus vel elit ultricies, at finibus nunc luctus. Nunc maximus cursus mauris quis elementum. Nunc dignissim, odio quis consectetur congue, elit mauris ullamcorper nisl, nec maximus ex ipsum a tortor. Fusce egestas lorem ullamcorper eros mollis, ac commodo augue porttitor. Phasellus accumsan molestie felis ac porta. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Cras in leo justo. Mauris id magna vitae odio malesuada facilisis id vitae nisi.\n" + 
-			"\n" + 
-			"Etiam quis egestas turpis, in consequat diam. Donec ut varius nunc. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Fusce id lorem eu velit porttitor efficitur. In consequat vel risus non porta. Quisque nec diam sed justo pellentesque varius. Proin accumsan porttitor orci. Donec ac odio quis nunc congue venenatis a congue augue.";
-
 }

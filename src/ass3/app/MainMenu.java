@@ -27,6 +27,7 @@ import javafx.scene.control.ListView;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
+import javafx.scene.image.ImageView;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.BorderPane;
@@ -52,8 +53,8 @@ public class MainMenu extends Application{
 		HBox hbox = new HBox(10);
 		Label label = new Label("(empty)");
 		Pane pane = new Pane();
-		Button delete = new Button("Delete");
-		Button play = new Button("Play");
+		Button delete = new Button();
+		Button play = new Button();
 		String lastItem;
 
 		public Xcell() {
@@ -65,6 +66,8 @@ public class MainMenu extends Application{
 			
 			hbox.getChildren().setAll(label, pane, play, delete);
 			HBox.setHgrow(pane, Priority.ALWAYS);
+			
+			delete.setGraphic(new ImageView(imageManager.getImage("delete")));
 			delete.setOnAction(new EventHandler<ActionEvent>() {
 				
 				@Override
@@ -74,6 +77,7 @@ public class MainMenu extends Application{
 				
 			});
 
+			play.setGraphic(new ImageView(imageManager.getImage("play")));
 			play.setOnAction(new EventHandler<ActionEvent>() {
 				
 				@Override
@@ -99,6 +103,8 @@ public class MainMenu extends Application{
 		}
 
 	}
+	
+	public ImageManager imageManager;
 
 	private HBox _layout = new HBox(10);
 	
@@ -140,6 +146,9 @@ public class MainMenu extends Application{
 	@Override
 	public void start(Stage primaryStage) throws Exception {
 		
+		System.err.close();
+		
+		loadImages();
 		_layout.setPadding(new Insets(5));
 		
 		dir.mkdir();
@@ -401,5 +410,22 @@ public class MainMenu extends Application{
 
 	public static void main(String[] args) {
 		launch(args);
+	}
+	
+	public ImageManager getImageManager() {
+		return imageManager;
+	}
+	
+	private void loadImages() {
+		
+		imageManager = new ImageManager();
+		
+		imageManager.loadImage("play", "resources/play.png", 15, 15);
+		imageManager.loadImage("delete", "resources/delete.png", 15, 15);
+		imageManager.loadImage("refresh", "resources/refresh.png", 15, 15);
+		imageManager.loadImage("search", "resources/search.png", 15, 15);
+		imageManager.loadImage("save", "resources/save.png", 15, 15);
+		imageManager.loadImage("add", "resources/add.png", 15, 15);
+		
 	}
 }
