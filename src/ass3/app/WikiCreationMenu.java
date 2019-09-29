@@ -1,19 +1,29 @@
 package ass3.app;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
 import ass3.app.tasks.CreateAudioFileTask;
+import ass3.app.tasks.CreateAudioFileTask.Synthesiser;
+import ass3.app.tasks.CreateCreationTask;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
-
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
@@ -22,29 +32,41 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Control;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
+import javafx.scene.control.MultipleSelectionModel;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.ScrollPane.ScrollBarPolicy;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
-
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.DragEvent;
+import javafx.scene.input.Dragboard;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
+import javafx.scene.paint.Color;
+import javafx.scene.text.Text;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 public class WikiCreationMenu {
 	
-	private static MediaPlayer currentAudioPreview = null;
+	private static ListView<AudioFileHBoxCell> audioFileListView = new ListView<>();
+	private static MediaPlayer currentAudioPreview = null;	
 	
-	private static VBox scrollContentPane;
-	
-	public static void createWindow(Stage parentStage, String wikiText) {
+	public static void createWindow(Stage parentStage, String wikiTerm, String wikiText) {
 				
 		VBox rootLayout = new VBox(10);
 		rootLayout.setPadding(new Insets(10));
@@ -60,24 +82,28 @@ public class WikiCreationMenu {
 		HBox utilityBar = new HBox(10);
 		
 		ObservableList<String> synthesiserOptions = FXCollections.observableArrayList(
-			"Festival",
-			"eSpeak",
-			"TTS",
-			"yeet"
+			Synthesiser.Festival.name(),
+			Synthesiser.eSpeak.name()
 		);
 		ComboBox synthesiserDropdown = new ComboBox(synthesiserOptions);
 		synthesiserDropdown.getSelectionModel().selectFirst();
 		synthesiserDropdown.setMinWidth(Control.USE_PREF_SIZE);
 		
 		ObservableList<String> voiceOptions = FXCollections.observableArrayList(
-			"Brian",
-			"Britney",
-			"Sarah",
-			"greg"
+			Synthesiser.valueOf((String) synthesiserDropdown.getSelectionModel().getSelectedItem()).getVoiceNames()
 		);
 		ComboBox voiceDropdown = new ComboBox(voiceOptions);
 		voiceDropdown.getSelectionModel().selectFirst();
 		voiceDropdown.setMinWidth(Control.USE_PREF_SIZE);
+		
+		synthesiserDropdown.getSelectionModel().selectedItemProperty().addListener((c) -> {
+			voiceDropdown.setItems(
+				FXCollections.observableArrayList(
+					Synthesiser.valueOf((String) synthesiserDropdown.getSelectionModel().getSelectedItem()).getVoiceNames()
+				)
+			);
+			voiceDropdown.getSelectionModel().selectFirst();
+		});
 		
 		Button previewButton = new Button("Preview selection");
 		previewButton.setMinWidth(Control.USE_PREF_SIZE);
@@ -89,17 +115,6 @@ public class WikiCreationMenu {
 		Button saveButton = new Button("Create audio file");
 		saveButton.setMinWidth(Control.USE_PREF_SIZE);
 		saveButton.setDisable(true);
-		
-		saveButton.disableProperty().addListener((observableValue, oldValue, newValue) -> {
-			
-			if (newValue == false && audioNameField.getText().length() == 0) {
-				// can only change to true if audio name field is nonempty
-				saveButton.setDisable(true);
-			}
-			
-		});
-		
-		
 				
 		Pane spacer = new Pane();
 		HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -112,23 +127,55 @@ public class WikiCreationMenu {
 		wikiTextArea.setMinHeight(400);
 		VBox.setVgrow(wikiTextArea, Priority.ALWAYS);
 		
+		// displays number of characters the user has selected
+		HBox footer = new HBox(7);
+		
+		Text descriptiveText = new Text("Number of words selected:");
+		descriptiveText.setFill(Color.web("333333"));
+		Text numCharactersText = new Text("0");
+		numCharactersText.setFill(Color.RED);
+		
+		spacer = new Pane();
+		HBox.setHgrow(spacer, Priority.ALWAYS);
+		
+		// progress bar and label used to update user as to the progress of the current operation
+		
+		ProgressBar progressBar = new ProgressBar(0);
+		progressBar.setMaxHeight(15);
+		Label progressLabel = new Label("");
+		
+		footer.getChildren().setAll(descriptiveText, numCharactersText, spacer, progressLabel, progressBar);
+		
+		// colour num words selected text according to whether valid number of words
+		// also disable preview / save buttons as necessary
 		wikiTextArea.selectedTextProperty().addListener((textProperty, oldValue, newValue) -> {
-			if (newValue.length() == 0) {
-				saveButton.setDisable(true);
-				previewButton.setDisable(true);
+			
+			String text = newValue.trim().replace("\n",  "");
+			String[] words = text.split(" ");
+			int numWords = words.length - ((text.length() == 0) ? 1 : 0);  // no text counts as one word for some reason (newline?)
+			
+			boolean disable = (numWords == 0 || numWords > 40) || audioNameField.getText().length() == 0;
+			
+			saveButton.setDisable(numWords == 0 || numWords > 40);
+			previewButton.setDisable(numWords == 0 || numWords > 40);
+			
+			if (numWords == 0 || numWords > 40) {
+				numCharactersText.setFill(Color.RED);
 			} else {
-				saveButton.setDisable(false);
-				previewButton.setDisable(false);
+				numCharactersText.setFill(Color.web("333333"));
 			}
+			
+			numCharactersText.setText("" + numWords + ((numWords > 40) ? " (too many words)" : ""));
+			
 		});
 		
 		audioNameField.textProperty().addListener((observable, oldValue, newValue) -> {
 			
-			if (newValue.length() == 0) {
-				saveButton.setDisable(true);
-			} else if (wikiTextArea.getSelectedText().length() != 0) {
-				saveButton.setDisable(false);
-			}
+			String text = wikiTextArea.getSelectedText().trim().replace("\n",  "");
+			String[] words = text.split(" ");
+			int numWords = words.length - ((text.length() == 0) ? 1 : 0);  // no text counts as one word for some reason (newline?)
+			
+			saveButton.setDisable(newValue.length() == 0 || numWords == 0 || numWords > 40);
 			
 		});
 		
@@ -142,9 +189,19 @@ public class WikiCreationMenu {
 			previewButton.setDisable(true);
 			
 			String text = wikiTextArea.getSelectedText();
-			Task<String> createAudioTask = new CreateAudioFileTask(text, null);
+			Task<String> createAudioTask = new CreateAudioFileTask(
+					(String) synthesiserDropdown.getSelectionModel().getSelectedItem(),
+					(String) voiceDropdown.getSelectionModel().getSelectedItem(),
+					text, null
+			);
+			
+			progressBar.progressProperty().bind(createAudioTask.progressProperty());
+			progressLabel.setText("Generating audio preview...");
 			
 			createAudioTask.setOnSucceeded((e_) -> {
+				
+				progressBar.progressProperty().unbind();
+				progressLabel.setText("");
 				
 				previewButton.setDisable(false);
 				
@@ -180,29 +237,50 @@ public class WikiCreationMenu {
 			// check if file with specified name exists
 			try {
 				
-				ProcessBuilder builder = new ProcessBuilder("test", "-e", "audio/" + audioNameField.getText());
+				ProcessBuilder builder = new ProcessBuilder("test", "-e", "audio/" + audioNameField.getText() + ".wav");
 				int fileExists = builder.start().waitFor();
-				
+								
 				if (fileExists == 0) {
 					Alert alert = new Alert(AlertType.CONFIRMATION, "Would you like to overwrite it?", 
-																	ButtonType.YES, ButtonType.NO);
+																	ButtonType.NO, ButtonType.YES);
 					alert.setHeaderText("File with that name already exists");
 					alert.showAndWait();
-					if (alert.getResult() == ButtonType.YES) {
-						
-						saveAudioFile(wikiTextArea.getSelectedText(), audioNameField.getText());
-						
+					if (alert.getResult() != ButtonType.YES) {
+						return;
 					}
 				}
 				
 			} catch (InterruptedException | IOException ex) {
 				ex.printStackTrace();
 			}
+			
+			Task<String> createAudioTask = new CreateAudioFileTask(
+					(String) synthesiserDropdown.getSelectionModel().getSelectedItem(),
+					(String) voiceDropdown.getSelectionModel().getSelectedItem(),
+					wikiTextArea.getSelectedText(), audioNameField.getText()
+			);
+			
+			progressLabel.setText("Saving audio file...");
+			progressBar.progressProperty().bind(createAudioTask.progressProperty());
+			
+			createAudioTask.setOnSucceeded((e_) -> {
+				progressLabel.setText("");
+				progressBar.progressProperty().unbind();
+				progressBar.setProgress(0);
+				updateAudioFileList();
+			});
+			
+			(new Service<String>() {
+				@Override 
+				public Task<String> createTask() {
+					return createAudioTask;
+				}
+			}).start();
 		
 			
 		});
 		
-		editorLayout.getChildren().setAll(utilityBar, wikiTextArea);
+		editorLayout.getChildren().setAll(utilityBar, wikiTextArea, footer);
 		
 		// END EDITOR LAYOUT //
 		
@@ -213,31 +291,102 @@ public class WikiCreationMenu {
 		
 		VBox creationLayout = new VBox(10);
 		
-		creationLayout.setMinWidth(350);
-		creationLayout.setPrefWidth(350);
-		creationLayout.setMaxWidth(350);
+		creationLayout.setMinWidth(500);
+		creationLayout.setPrefWidth(500);
+		creationLayout.setMaxWidth(500);
 		VBox.setVgrow(creationLayout, Priority.ALWAYS);
 		
-		ScrollPane audioScrollPane = new ScrollPane();
-		VBox.setVgrow(audioScrollPane, Priority.ALWAYS);
-		
-		scrollContentPane = new VBox(10);
-		scrollContentPane.setPadding(new Insets(10));
-		
-		audioScrollPane.setContent(scrollContentPane);
-		audioScrollPane.setHbarPolicy(ScrollBarPolicy.NEVER);
-		VBox.setVgrow(audioScrollPane, Priority.ALWAYS);
+		VBox.setVgrow(audioFileListView, Priority.ALWAYS);
+		updateAudioFileList();
+		audioFileListView.setSelectionModel(new NoSelectionModel<>());
+		audioFileListView.setFocusTraversable(false);
 		
 		TextField creationNameField = new TextField();
 		creationNameField.setPromptText("Creation name..");
 		HBox.setHgrow(creationNameField, Priority.ALWAYS);
+	
+		ObservableList<Integer> numImagesOptions = FXCollections.observableArrayList();
+		for (int i = 1; i <= 10; i++) {
+			numImagesOptions.add(i);
+		}
+		ComboBox<Integer> numImagesDropdown = new ComboBox<>(numImagesOptions);
+		numImagesDropdown.getSelectionModel().selectFirst();
 		
 		Button saveCreationButton = new Button("Save Creation");
+		saveCreationButton.setOnAction((e) -> {
+			
+			String creationName = creationNameField.getText();
+			
+			// check if creation with specified name exists
+			try {
+				
+				ProcessBuilder builder = new ProcessBuilder("test", "-e", "creations/" + creationName + ".mp4");
+				int fileExists = builder.start().waitFor();
+								
+				if (fileExists == 0) {
+					Alert alert = new Alert(AlertType.CONFIRMATION, "Would you like to overwrite it?", 
+																	ButtonType.NO, ButtonType.YES);
+					alert.setHeaderText("Creation with that name already exists");
+					alert.showAndWait();
+					if (alert.getResult() != ButtonType.YES) {
+						return;
+					}
+				}
+				
+			} catch (InterruptedException | IOException ex) {
+				ex.printStackTrace();
+			}
+			
+			
+			List<String> audioFilePaths = new ArrayList<String>();
+			for (AudioFileHBoxCell cell : audioFileListView.getItems()) {
+				audioFilePaths.add(cell.getAudioFileName());
+			}
+			
+			int numImages = numImagesDropdown.getSelectionModel().getSelectedItem();
+			
+			Task<String> createCreationTask = new CreateCreationTask("creations/" + creationName + ".mp4", audioFilePaths, wikiTerm, numImages);
+			progressLabel.textProperty().bind(createCreationTask.messageProperty());
+			progressBar.progressProperty().bind(createCreationTask.progressProperty());
+			
+			createCreationTask.setOnSucceeded((e_) -> {
+				progressLabel.textProperty().unbind();
+				progressBar.progressProperty().unbind();
+				progressBar.setProgress(0);
+				Alert alert = new Alert(AlertType.INFORMATION, "Creation '" + creationName + "' created successfully.");
+				alert.show();
+			});
+			
+			Service<String> creationService = new Service<String>() {
+				
+				@Override
+				public Task<String> createTask() {
+					return createCreationTask;
+				}
+				
+			};
+			
+			creationService.start();
+			
+			
+		});
+		saveCreationButton.setDisable(true);
+		
+		creationNameField.setOnKeyReleased((e) -> {
+			if (e.getCode() == KeyCode.ENTER) {
+				saveCreationButton.fire();
+			}
+		});
+		
+		// if name field empty don't allow them to click save creation
+		creationNameField.textProperty().addListener((c) -> {
+			saveCreationButton.setDisable(creationNameField.getText().length() == 0);
+		});
 		
 		HBox saveLayout = new HBox(10);
-		saveLayout.getChildren().setAll(creationNameField, saveCreationButton);
+		saveLayout.getChildren().setAll(creationNameField, numImagesDropdown, saveCreationButton);
 		
-		creationLayout.getChildren().setAll(audioScrollPane, saveLayout);
+		creationLayout.getChildren().setAll(audioFileListView, saveLayout);
 				
 		// END CREATION MENU LAYOUT //
 		
@@ -257,72 +406,240 @@ public class WikiCreationMenu {
 		
 	}
 	
-	private static void saveAudioFile(String text, String name) {
-		
-		Task<String> audioTask = new CreateAudioFileTask(text, name);
-		audioTask.setOnSucceeded((e) -> {
-
-			updateAudioFileList("");
-
-		});
-		
-		Service<String> service = new Service<String>() {
-			
-			@Override
-			protected Task<String> createTask() {
-				return audioTask;
-			}
-			
-		};
-		service.start();
-		
-	}
-	
-	private static void updateAudioFileList(String searchTerm) {
-		
-		String cmd = "ls audio/ | grep \"" + searchTerm + "\"";
+	private static void updateAudioFileList() {
+				
+		String cmd = "ls audio/ | grep \".wav\"";
 		try {
 			
 			ProcessBuilder builder = new ProcessBuilder("bash", "-c", cmd);
 			Process process = builder.start();
+			process.waitFor();
 			
 			InputStream stdout = process.getInputStream();
 			BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(stdout));
 			
+			ObservableList<AudioFileHBoxCell> list = audioFileListView.getItems();
+			
 			String fileName;
+			List<String> fileNames = new ArrayList<String>();
 			while ((fileName = bufferedReader.readLine()) != null) {
+				fileNames.add(fileName);
+			}
+			
+			ObservableList<AudioFileHBoxCell> updatedList = FXCollections.observableArrayList();
+			for (AudioFileHBoxCell audioCell : list) {
+				if (fileNames.contains(audioCell.getAudioFileName())) {
+					updatedList.add(audioCell);
+				}
+			}
+			
+			for (String audioFileName : fileNames) {
 				
-				fileName = fileName.split(".")[0];  // remove extension
-				System.out.println(fileName);
+				boolean exists = false;
+				for (AudioFileHBoxCell audioCell : updatedList) {
+					if (audioCell.getAudioFileName().equals(audioFileName)) {
+						exists = true;
+						break;
+					}
+				}
+				
+				if (!exists) {
+					updatedList.add(new AudioFileHBoxCell(audioFileName));
+				}
 				
 			}
 			
-		} catch (IOException e) {
+			audioFileListView.setItems(updatedList);
+			
+		} catch (IOException | InterruptedException e) {
 			e.printStackTrace();
 		}
 		
 	}
 	
-	private static HBox createAudioMenuItem(String name, String dateModified) {
+	public static class AudioFileHBoxCell extends HBox {
 		
-		Label nameLabel = new Label(name),
-			  dateLabel = new Label(dateModified);
+		private Label nameLabel;
+		private Pane spacer;
+		private Button playButton, deleteButton;
 		
-		VBox labelContainer = new VBox(5);
-		labelContainer.getChildren().setAll(nameLabel, dateLabel);
+		private VBox shiftButtonContainer;
+		private Button shiftUpButton, shiftDownButton;   // allow rearranging of audio file list
 		
-		Button playButton = new Button("Play"),
-			   deleteButton = new Button("Delete");
+		private final Image shiftUpIcon   = new Image(getClass().getResourceAsStream("resources/shiftUpIcon.png"));
+		private final Image shiftDownIcon = new Image(getClass().getResourceAsStream("resources/shiftDownIcon.png"));
 		
-		Pane spacer = new Pane();
-		HBox.setHgrow(spacer, Priority.ALWAYS);
+		public AudioFileHBoxCell(String audioFileName) {
+			
+			super(8);
+			setAlignment(Pos.CENTER);
+			setPadding(new Insets(3));
+						
+			shiftButtonContainer = new VBox(5);
+			shiftUpButton = createShiftButton(-1);
+			shiftDownButton = createShiftButton(1);
+			
+			shiftButtonContainer.getChildren().addAll(shiftUpButton, shiftDownButton);			
+			
+			nameLabel = new Label(audioFileName);
+			
+			spacer = new Pane();
+			HBox.setHgrow(spacer,  Priority.ALWAYS);
+			
+			playButton = new Button("Play");
+			playButton.setOnAction((e) -> {
+				
+				Media audio = new Media(new File("audio", audioFileName).toURI().toString());
+				currentAudioPreview = new MediaPlayer(audio);
+				currentAudioPreview.play();
+				
+			});
+			playButton.setOnMouseEntered((e) -> e.consume());
+			
+			deleteButton = new Button("Delete");
+			deleteButton.setOnAction((e) -> {
+				
+				try {
+					
+					ProcessBuilder pb = new ProcessBuilder("rm", "audio/" + audioFileName);
+					pb.start().waitFor();
+					updateAudioFileList();
+					
+				} catch (InterruptedException | IOException ex) {
+					ex.printStackTrace();
+				}
+				
+			});
+			deleteButton.setOnMouseEntered((e) -> e.consume());
+
+									
+			getChildren().addAll(shiftButtonContainer, nameLabel, spacer, playButton, deleteButton);
+			
+		}
 		
-		HBox menuItem = new HBox(10);
-		menuItem.getChildren().setAll(labelContainer, spacer, playButton, deleteButton);
+		@Override
+		public boolean equals(Object o) {
+			
+			if (!(o instanceof AudioFileHBoxCell)) {
+				return false;
+			}
+			
+			AudioFileHBoxCell other = (AudioFileHBoxCell) o;
+			return other.getAudioFileName().equals(this.getAudioFileName());
+			
+		}
 		
-		return menuItem;
+		public String getAudioFileName() {
+			return nameLabel.getText();
+		}
+		
+		public void setAudioFileName(String name) {
+			nameLabel.setText(name);
+		}
+		
+		private void shift(int dir) {
+			
+			ObservableList<AudioFileHBoxCell> items = audioFileListView.getItems();
+			
+			int thisIndex = items.indexOf(this),
+				otherIndex = thisIndex + dir;
+			
+			if (otherIndex < 0 || otherIndex >= items.size()) {
+				return;
+			}
+			
+			String otherName = items.get(otherIndex).getAudioFileName(),
+				   thisName = items.get(thisIndex).getAudioFileName();
+			
+			
+			items.get(otherIndex).setAudioFileName(thisName);
+			items.get(thisIndex).setAudioFileName(otherName);
+	
+		}
+		
+		private Button createShiftButton(int dir) {
+						
+			Button shiftButton = new Button();
+			shiftButton.setOnAction((e) -> {
+				shift(dir);
+			});
+			shiftButton.setGraphic(new ImageView((dir < 0) ? shiftUpIcon : shiftDownIcon));
+			shiftButton.setPadding(new Insets(3, 4, 3, 4));
+			
+			return shiftButton;
+			
+		}
 		
 	}
+	
+	public static class NoSelectionModel<T> extends MultipleSelectionModel<T> {
+
+	    @Override
+	    public ObservableList<Integer> getSelectedIndices() {
+	        return FXCollections.emptyObservableList();
+	    }
+
+	    @Override
+	    public ObservableList<T> getSelectedItems() {
+	        return FXCollections.emptyObservableList();
+	    }
+
+	    @Override
+	    public void selectIndices(int index, int... indices) {
+	    }
+
+	    @Override
+	    public void selectAll() {
+	    }
+
+	    @Override
+	    public void selectFirst() {
+	    }
+
+	    @Override
+	    public void selectLast() {
+	    }
+
+	    @Override
+	    public void clearAndSelect(int index) {
+	    }
+
+	    @Override
+	    public void select(int index) {
+	    }
+
+	    @Override
+	    public void select(T obj) {
+	    }
+
+	    @Override
+	    public void clearSelection(int index) {
+	    }
+
+	    @Override
+	    public void clearSelection() {
+	    }
+
+	    @Override
+	    public boolean isSelected(int index) {
+	        return false;
+	    }
+
+	    @Override
+	    public boolean isEmpty() {
+	        return true;
+	    }
+
+	    @Override
+	    public void selectPrevious() {
+	    }
+
+	    @Override
+	    public void selectNext() {
+	    }
+	}
+	
+	
 	
 	private static String dummyText = 
 			"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam finibus placerat nulla, ac pretium est efficitur a. Aliquam ultricies rutrum dignissim. Fusce non purus et dolor tristique rutrum. Aliquam convallis ornare est vitae condimentum. Pellentesque maximus vel urna ut auctor. Ut et lorem eu diam mattis posuere. Donec a aliquam magna, ac tempus orci. Nam a justo sit amet lectus iaculis facilisis. Aliquam enim orci, ultricies vitae nisi vel, tempor maximus urna. Quisque est risus, mattis in lacus ut, tempor faucibus ligula. Maecenas non accumsan nisl, id tincidunt nisl. Donec varius auctor lacus a semper. Vivamus dolor est, volutpat at accumsan vitae, semper a leo. Fusce eget commodo neque. Vivamus efficitur tempor fringilla. Fusce at mattis purus.\n" + 
