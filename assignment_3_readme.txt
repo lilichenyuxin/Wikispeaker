@@ -10,7 +10,7 @@ text(20-40 words), they are able to change the synthetic speech setting. Then th
 
 PROJECT SET UP
 ------------
-This program is intended to execute using command line in Linux. Firstly change the directory to the location of the executable jar file. From command line "bash wikispeaks.sh" to run this jar.
+This program is intended to execute using command line in Linux. Firstly change the directory to the location of the executable jar file. From command line bash wikispeaks.sh to run this jar.
 
 
 UTILITY
